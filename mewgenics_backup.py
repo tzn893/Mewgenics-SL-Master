@@ -2,6 +2,11 @@ import os
 import shutil
 import glob
 import subprocess
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QComboBox, QLabel, QTextEdit, QMessageBox, QFrame,
@@ -14,7 +19,7 @@ class SaveManager(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Mewgenics Save Manager")
-        self.setMinimumSize(QSize(500, 500))
+        self.setMinimumSize(QSize(500, 520))
         
         # Paths configuration
         self.roaming_path = os.path.expandvars(r'%APPDATA%\Glaiel Games\Mewgenics')
@@ -49,7 +54,18 @@ class SaveManager(QMainWindow):
 
         # Game EXE Configuration
         exe_layout = QVBoxLayout()
-        exe_layout.addWidget(QLabel("Mewgenics.exe Path:"))
+        
+        exe_header_layout = QHBoxLayout()
+        exe_header_layout.addWidget(QLabel("Mewgenics.exe Path:"))
+        
+        self.auto_detect_btn = QPushButton("Auto-Detect (Process)")
+        self.auto_detect_btn.setFixedWidth(140)
+        self.auto_detect_btn.clicked.connect(self.detect_exe_by_process)
+        self.auto_detect_btn.setStyleSheet("font-size: 10px; padding: 2px; background-color: #34495e; color: white;")
+        exe_header_layout.addWidget(self.auto_detect_btn)
+        
+        exe_layout.addLayout(exe_header_layout)
+        
         exe_input_layout = QHBoxLayout()
         self.exe_input = QLineEdit()
         self.exe_input.setPlaceholderText("Select Mewgenics.exe location...")
@@ -116,6 +132,37 @@ class SaveManager(QMainWindow):
 
     def log(self, message):
         self.log_area.append(f"> {message}")
+
+    def detect_exe_by_process(self):
+        if psutil is None:
+            self.log("Error: 'psutil' library not found. Please install it with: pip install psutil")
+            QMessageBox.warning(self, "Dependency Missing", "The 'psutil' library is required for auto-detection.\n\nPlease run 'pip install psutil' in your terminal.")
+            return
+
+        self.log("Searching for running Mewgenics process...")
+        found_path = None
+        
+        try:
+            for proc in psutil.process_iter(['name', 'exe']):
+                try:
+                    # Check if 'mewgenics' is in the process name (case-insensitive)
+                    if proc.info['name'] and 'mewgenics' in proc.info['name'].lower():
+                        if proc.info['exe']:
+                            found_path = proc.info['exe']
+                            break
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+            
+            if found_path:
+                self.exe_input.setText(found_path)
+                self.game_exe_path = found_path
+                self.log(f"Auto-detected currently running game at: {found_path}")
+                QMessageBox.information(self, "Success", f"Found running game at:\n{found_path}")
+            else:
+                self.log("Auto-detect failed: No running Mewgenics process found.")
+                QMessageBox.warning(self, "Detection Failed", "Could not find a running Mewgenics process.\n\nPlease start the game first, then click Auto-Detect.")
+        except Exception as e:
+            self.log(f"Detection Error: {str(e)}")
 
     def browse_exe(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Mewgenics.exe", "", "Executable Files (*.exe)")

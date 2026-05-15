@@ -31,6 +31,7 @@ class SaveManager(QMainWindow):
             "steamcampaign03.sav"
         ]
         self.game_exe_path = ""
+        self.always_on_top = False
         self.log_entries = []
         
         # Ensure saved directory exists
@@ -52,11 +53,20 @@ class SaveManager(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # Header
+        # Header and Top-most toggle
+        top_bar_layout = QHBoxLayout()
         header = QLabel("Mewgenics 存档备份与管理")
         header.setFont(QFont("Microsoft YaHei", 16, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(header)
+        
+        from PyQt6.QtWidgets import QCheckBox
+        self.top_most_checkbox = QCheckBox("窗口置顶")
+        self.top_most_checkbox.setStyleSheet("font-size: 11px; color: #34495e;")
+        self.top_most_checkbox.stateChanged.connect(self.toggle_top_most)
+        
+        top_bar_layout.addWidget(header, 1)
+        top_bar_layout.addWidget(self.top_most_checkbox)
+        layout.addLayout(top_bar_layout)
 
         # Path Status
         self.path_label = QLabel("路径: 正在搜索...")
@@ -70,8 +80,8 @@ class SaveManager(QMainWindow):
         exe_header_layout = QHBoxLayout()
         exe_header_layout.addWidget(QLabel("Mewgenics.exe 路径:"))
         
-        self.auto_detect_btn = QPushButton("自动检测 (运行中的进程)")
-        self.auto_detect_btn.setFixedWidth(160)
+        self.auto_detect_btn = QPushButton("自动检测")
+        self.auto_detect_btn.setFixedWidth(120)
         self.auto_detect_btn.clicked.connect(self.detect_exe_by_process)
         self.auto_detect_btn.setStyleSheet("font-size: 11px; padding: 2px; background-color: #34495e; color: white;")
         exe_header_layout.addWidget(self.auto_detect_btn)
@@ -83,8 +93,9 @@ class SaveManager(QMainWindow):
         self.exe_input.setPlaceholderText("请选择 Mewgenics.exe 的位置...")
         self.exe_input.textChanged.connect(self.save_config)
         self.exe_browse_btn = QPushButton("浏览")
+        self.exe_browse_btn.setFixedWidth(80)
         self.exe_browse_btn.clicked.connect(self.browse_exe)
-        exe_input_layout.addWidget(self.exe_input)
+        exe_input_layout.addWidget(self.exe_input, 1)
         exe_input_layout.addWidget(self.exe_browse_btn)
         exe_layout.addLayout(exe_input_layout)
         layout.addLayout(exe_layout)
@@ -163,6 +174,7 @@ class SaveManager(QMainWindow):
                     config = json.load(f)
                     exe_path = config.get("exe_path", "")
                     selected_slot = config.get("selected_slot", "")
+                    always_on_top = config.get("always_on_top", False)
                     
                     if exe_path:
                         self.exe_input.setText(exe_path)
@@ -171,6 +183,9 @@ class SaveManager(QMainWindow):
                     if selected_slot in self.save_slots:
                         index = self.save_slots.index(selected_slot)
                         self.slot_combo.setCurrentIndex(index)
+                    
+                    self.top_most_checkbox.setChecked(always_on_top)
+                    self.toggle_top_most(always_on_top)
                 self.log("已从 config.json 读取配置。")
             except Exception as e:
                 self.log(f"读取配置失败: {str(e)}")
@@ -178,13 +193,26 @@ class SaveManager(QMainWindow):
     def save_config(self):
         config = {
             "exe_path": self.exe_input.text().strip(),
-            "selected_slot": self.slot_combo.currentText()
+            "selected_slot": self.slot_combo.currentText(),
+            "always_on_top": self.top_most_checkbox.isChecked()
         }
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=4, ensure_ascii=False)
         except Exception as e:
             self.log(f"保存配置失败: {str(e)}")
+
+    def toggle_top_most(self, state):
+        should_be_on_top = bool(state)
+        # Using WindowStaysOnTopHint for always on top
+        if should_be_on_top:
+            self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        else:
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint)
+        
+        # In Qt, changing flags hides the window, so we must show it again
+        self.show()
+        self.save_config()
 
     def closeEvent(self, event):
         try:
@@ -210,7 +238,8 @@ class SaveManager(QMainWindow):
         try:
             for proc in psutil.process_iter(['name', 'exe']):
                 try:
-                    if proc.info['name'] and 'mewgenics' in proc.info['name'].lower():
+                    # 严格匹配进程名 Mewgenics.exe
+                    if proc.info['name'] and proc.info['name'].lower() == 'mewgenics.exe':
                         if proc.info['exe']:
                             found_path = proc.info['exe']
                             break

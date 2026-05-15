@@ -1,1 +1,4 @@
 saved/
+build/
+dist/
+*.spec

@@ -122,7 +122,7 @@ class SaveManager(QMainWindow):
         layout.addLayout(btn_layout)
 
         # Quick Restart Button
-        self.restart_btn = QPushButton("⚡ 快速重启 (备份 + 结束进程 + 重新启动 + 读档)")
+        self.restart_btn = QPushButton("⚡ 快速SL (备份 + 结束进程 + 重新启动 + 读档)")
         self.restart_btn.setFixedHeight(50)
         self.restart_btn.clicked.connect(self.perform_quick_restart)
         self.restart_btn.setStyleSheet("""
@@ -133,6 +133,19 @@ class SaveManager(QMainWindow):
             border-radius: 5px;
         """)
         layout.addWidget(self.restart_btn)
+
+        # Direct Restart Button (New)
+        self.direct_restart_btn = QPushButton("🔄 直接重启 (结束进程 + 读档 + 重新启动)")
+        self.direct_restart_btn.setFixedHeight(50)
+        self.direct_restart_btn.clicked.connect(self.perform_direct_restart)
+        self.direct_restart_btn.setStyleSheet("""
+            background-color: #c0392b; 
+            color: white; 
+            font-weight: bold; 
+            border: 2px solid #962d22;
+            border-radius: 5px;
+        """)
+        layout.addWidget(self.direct_restart_btn)
 
         layout.addStretch()
         self.log("工具就绪。")
@@ -175,11 +188,12 @@ class SaveManager(QMainWindow):
 
     def closeEvent(self, event):
         try:
-            with open(self.log_file_path, 'a', encoding='utf-8') as f:
-                f.write("\n" + "="*50 + "\n")
-                f.write(f"Session started at: {self.log_entries[0] if self.log_entries else 'Unknown'}\n")
-                f.write("\n".join(self.log_entries))
-                f.write("\n" + "="*50 + "\n")
+            if self.log_entries:
+                with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                    f.write("\n" + "="*50 + "\n")
+                    f.write(f"Session end at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("\n".join(self.log_entries))
+                    f.write("\n" + "="*50 + "\n")
         except Exception as e:
             print(f"写入日志文件失败: {str(e)}")
         event.accept()
@@ -252,6 +266,7 @@ class SaveManager(QMainWindow):
         self.backup_btn.setEnabled(False)
         self.restore_btn.setEnabled(False)
         self.restart_btn.setEnabled(False)
+        self.direct_restart_btn.setEnabled(False)
         self.slot_combo.setEnabled(False)
 
     def perform_backup(self, silent=False):
@@ -273,26 +288,31 @@ class SaveManager(QMainWindow):
             self.log(f"备份出错: {str(e)}")
             return False
 
-    def perform_restore(self):
+    def perform_restore(self, silent=False):
         filename = self.slot_combo.currentText()
         src = os.path.join(self.backup_path, filename)
         dst = os.path.join(self.base_save_path, filename)
 
         if not os.path.exists(src):
             self.log(f"错误: 未在 my_backup 中找到备份文件 {filename}。")
-            return
+            return False
 
-        reply = QMessageBox.question(self, '确认恢复', 
-                                   f"确定要使用备份覆盖当前的 {filename} 存档吗？",
-                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if not silent:
+            reply = QMessageBox.question(self, '确认读档', 
+                                       f"确定要从备份恢复 {filename} 存档吗？",
+                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
+                return False
 
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                shutil.copy2(src, dst)
-                self.log(f"成功: 已从 my_backup 恢复 {filename}。")
-                QMessageBox.information(self, "成功", f"存档 {filename} 恢复完成")
-            except Exception as e:
-                self.log(f"恢复出错: {str(e)}")
+        try:
+            shutil.copy2(src, dst)
+            self.log(f"成功: 已从 my_backup 读档恢复 {filename}。")
+            if not silent:
+                QMessageBox.information(self, "成功", f"存档 {filename} 读档完成")
+            return True
+        except Exception as e:
+            self.log(f"读档出错: {str(e)}")
+            return False
 
     def perform_quick_restart(self):
         exe_path = self.exe_input.text().strip()
@@ -303,7 +323,7 @@ class SaveManager(QMainWindow):
         # 1. Backup
         self.log("阶段 1: 正在备份选中的存档...")
         if not self.perform_backup(silent=True):
-            self.log("由于备份失败，快速重启已中止。")
+            self.log("由于备份失败，快速SL已中止。")
             return
 
         # 2. Kill process
@@ -316,11 +336,42 @@ class SaveManager(QMainWindow):
             self.log(f"结束进程出错: {str(e)}")
 
         # 3. Launch
-        self.log(f"阶段 3: 正在启动 {exe_path}...")
+        self.log(f"阶段 3: 正在重新启动游戏并读档...")
         try:
             subprocess.Popen([exe_path], cwd=os.path.dirname(exe_path))
             self.log("游戏已成功启动。")
-            QMessageBox.information(self, "快速重启", "快速重启任务序列已完成！")
+            QMessageBox.information(self, "快速SL", "快速SL序列执行完成！")
+        except Exception as e:
+            self.log(f"启动出错: {str(e)}")
+            QMessageBox.critical(self, "错误", f"无法启动游戏: {str(e)}")
+
+    def perform_direct_restart(self):
+        exe_path = self.exe_input.text().strip()
+        if not exe_path or not os.path.exists(exe_path):
+            QMessageBox.warning(self, "路径错误", "请先提供有效的 Mewgenics.exe 路径。")
+            return
+
+        # 1. Kill process
+        self.log("开始直接重启流程...")
+        self.log("阶段 1: 正在结束 mewgenics.exe 进程...")
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", "mewgenics.exe", "/T"], 
+                          capture_output=True, text=True)
+        except Exception as e:
+            self.log(f"结束进程出错: {str(e)}")
+
+        # 2. Restore (Load)
+        self.log("阶段 2: 正在从备份读档...")
+        if not self.perform_restore(silent=True):
+            self.log("读档失败，中止启动。")
+            return
+
+        # 3. Launch
+        self.log(f"阶段 3: 正在重新启动游戏...")
+        try:
+            subprocess.Popen([exe_path], cwd=os.path.dirname(exe_path))
+            self.log("游戏已重新启动。")
+            QMessageBox.information(self, "直接重启", "直接重启流程已完成！")
         except Exception as e:
             self.log(f"启动出错: {str(e)}")
             QMessageBox.critical(self, "错误", f"无法启动游戏: {str(e)}")

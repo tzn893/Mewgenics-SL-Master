@@ -1,0 +1,1 @@
+python -m PyInstaller --onefile your_script.py

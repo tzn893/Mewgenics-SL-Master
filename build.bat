@@ -1,1 +1,1 @@
-python -m PyInstaller --onefile your_script.py
+python -m PyInstaller --onefile mewgenics_backup.py

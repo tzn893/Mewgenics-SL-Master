@@ -20,7 +20,7 @@ from PyQt6.QtGui import QFont
 class SaveManager(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Mewgenics 存档管理工具")
+        self.setWindowTitle("Mewgenics SL Master")
         self.setMinimumSize(QSize(500, 350))
         
         # Paths configuration
@@ -55,7 +55,7 @@ class SaveManager(QMainWindow):
 
         # Header and Top-most toggle
         top_bar_layout = QHBoxLayout()
-        header = QLabel("Mewgenics 存档备份与管理")
+        header = QLabel("Mewgenics SL Master")
         header.setFont(QFont("Microsoft YaHei", 16, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         

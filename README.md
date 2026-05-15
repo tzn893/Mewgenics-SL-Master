@@ -1,4 +1,4 @@
-# Mewgenics Save Manager (Mewgenics 存档管理工具)
+# Mewgenics SL Master
 
 一个为《Mewgenics》设计的辅助工具，支持存档自动备份、读档、以及快速 SL（重启游戏并恢复存档）。
 
